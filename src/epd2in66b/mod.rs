@@ -166,10 +166,7 @@
 //!}
 //!```
 
-use embedded_hal::{
-    blocking::{delay::*, spi::Write},
-    digital::v2::*,
-};
+use embedded_hal::{delay::*, digital::*, spi::SpiDevice};
 
 use crate::color::TriColor;
 use crate::interface::DisplayInterface;
@@ -189,6 +186,8 @@ pub const HEIGHT: u32 = 296;
 /// White, display this during long-term storage
 pub const DEFAULT_BACKGROUND_COLOR: TriColor = TriColor::White;
 
+const SINGLE_BYTE_WRITE: bool = true;
+
 /// A Display buffer configured with our extent and color depth.
 #[cfg(feature = "graphics")]
 pub type Display2in66b = crate::graphics::Display<
@@ -200,20 +199,19 @@ pub type Display2in66b = crate::graphics::Display<
 >;
 
 /// The EPD 2in66-B driver.
-pub struct Epd2in66b<SPI, CS, BUSY, DC, RST, DELAY> {
-    interface: DisplayInterface<SPI, CS, BUSY, DC, RST, DELAY>,
+pub struct Epd2in66b<SPI, BUSY, DC, RST, DELAY> {
+    interface: DisplayInterface<SPI, BUSY, DC, RST, DELAY, SINGLE_BYTE_WRITE>,
     background: TriColor,
 }
 
-impl<SPI, CS, BUSY, DC, RST, DELAY> InternalWiAdditions<SPI, CS, BUSY, DC, RST, DELAY>
-    for Epd2in66b<SPI, CS, BUSY, DC, RST, DELAY>
+impl<SPI, BUSY, DC, RST, DELAY> InternalWiAdditions<SPI, BUSY, DC, RST, DELAY>
+    for Epd2in66b<SPI, BUSY, DC, RST, DELAY>
 where
-    SPI: Write<u8>,
-    CS: OutputPin,
+    SPI: SpiDevice,
     BUSY: InputPin,
     DC: OutputPin,
     RST: OutputPin,
-    DELAY: DelayUs<u32>,
+    DELAY: DelayUs,
 {
     fn init(&mut self, spi: &mut SPI, delay: &mut DELAY) -> Result<(), SPI::Error> {
         // We follow the sequence of the Pi-Pico hat example code.
@@ -233,15 +231,14 @@ where
     }
 }
 
-impl<SPI, CS, BUSY, DC, RST, DELAY> WaveshareThreeColorDisplay<SPI, CS, BUSY, DC, RST, DELAY>
-    for Epd2in66b<SPI, CS, BUSY, DC, RST, DELAY>
+impl<SPI, BUSY, DC, RST, DELAY> WaveshareThreeColorDisplay<SPI, BUSY, DC, RST, DELAY>
+    for Epd2in66b<SPI, BUSY, DC, RST, DELAY>
 where
-    SPI: Write<u8>,
-    CS: OutputPin,
+    SPI: SpiDevice,
     BUSY: InputPin,
     DC: OutputPin,
     RST: OutputPin,
-    DELAY: DelayUs<u32>,
+    DELAY: DelayUs,
 {
     fn update_color_frame(
         &mut self,
@@ -277,21 +274,19 @@ where
     }
 }
 
-impl<SPI, CS, BUSY, DC, RST, DELAY> WaveshareDisplay<SPI, CS, BUSY, DC, RST, DELAY>
-    for Epd2in66b<SPI, CS, BUSY, DC, RST, DELAY>
+impl<SPI, BUSY, DC, RST, DELAY> WaveshareDisplay<SPI, BUSY, DC, RST, DELAY>
+    for Epd2in66b<SPI, BUSY, DC, RST, DELAY>
 where
-    SPI: Write<u8>,
-    CS: OutputPin,
+    SPI: SpiDevice,
     BUSY: InputPin,
     DC: OutputPin,
     RST: OutputPin,
-    DELAY: DelayUs<u32>,
+    DELAY: DelayUs,
 {
     type DisplayColor = TriColor;
 
     fn new(
         spi: &mut SPI,
-        cs: CS,
         busy: BUSY,
         dc: DC,
         rst: RST,
@@ -302,7 +297,7 @@ where
         Self: Sized,
     {
         let mut epd = Self {
-            interface: DisplayInterface::new(cs, busy, dc, rst, delay_us),
+            interface: DisplayInterface::new(busy, dc, rst, delay_us),
             background: DEFAULT_BACKGROUND_COLOR,
         };
         epd.init(spi, delay)?;
@@ -404,14 +399,13 @@ where
 }
 
 // Helper functions that enforce some type and value constraints. Meant to help with code readability. They caught some of my silly errors -> yay rust!.
-impl<SPI, CS, BUSY, DC, RST, DELAY> Epd2in66b<SPI, CS, BUSY, DC, RST, DELAY>
+impl<SPI, BUSY, DC, RST, DELAY> Epd2in66b<SPI, BUSY, DC, RST, DELAY>
 where
-    SPI: Write<u8>,
-    CS: OutputPin,
+    SPI: SpiDevice,
     BUSY: InputPin,
     DC: OutputPin,
     RST: OutputPin,
-    DELAY: DelayUs<u32>,
+    DELAY: DelayUs,
 {
     fn wait_until_idle(&mut self, delay: &mut DELAY) -> Result<(), SPI::Error> {
         self.interface.wait_until_idle(delay, false);
